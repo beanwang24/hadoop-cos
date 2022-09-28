@@ -11,6 +11,7 @@ import org.apache.hadoop.fs.cosn.CRC32CCheckSum;
 import org.apache.hadoop.fs.cosn.CRC64Checksum;
 import org.apache.hadoop.fs.cosn.Unit;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.Progressable;
 import org.slf4j.Logger;
@@ -23,8 +24,19 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /*
  * the origin hadoop cos implements
@@ -37,6 +49,8 @@ public class CosNFileSystem extends FileSystem {
     static final Charset METADATA_ENCODING = StandardCharsets.UTF_8;
     // The length of name:value pair should be less than or equal to 1024 bytes.
     static final int MAX_XATTR_SIZE = 1024;
+    static final int BUCKET_LIST_LIMIT = 999;
+    static final int POSIX_BUCKET_LIST_LIMIT = 5000;
 
     private URI uri;
     private String bucket;
@@ -382,11 +396,7 @@ public class CosNFileSystem extends FileSystem {
             }
             // how to tell the result
             if (!isPosixBucket) {
-                int listMaxLength = this.getConf().getInt(
-                        CosNConfigKeys.LISTSTATUS_LIST_MAX_KEYS,
-                        CosNConfigKeys.DEFAULT_LISTSTATUS_LIST_MAX_KEYS
-                );
-                internalRecursiveDelete(key, listMaxLength);
+                internalRecursiveDelete(key, BUCKET_LIST_LIMIT);
             } else {
                 internalAutoRecursiveDelete(key);
             }
@@ -523,15 +533,9 @@ public class CosNFileSystem extends FileSystem {
         Path absolutePath = makeAbsolute(f);
         String key = pathToKey(absolutePath);
 
-        int listMaxLength = this.getConf().getInt(
-                CosNConfigKeys.LISTSTATUS_LIST_MAX_KEYS,
-                CosNConfigKeys.DEFAULT_LISTSTATUS_LIST_MAX_KEYS
-        );
+        int listMaxLength = CosNFileSystem.BUCKET_LIST_LIMIT;
         if (isPosixBucket) {
-            listMaxLength = this.getConf().getInt(
-                    CosNConfigKeys.LISTSTATUS_POSIX_BUCKET__LIST_MAX_KEYS,
-                    CosNConfigKeys.DEFAULT_LISTSTATUS_POSIX_BUCKET_LIST_MAX_KEYS
-            );
+            listMaxLength = CosNFileSystem.POSIX_BUCKET_LIST_LIMIT;
         }
 
         if (key.length() > 0) {
@@ -846,21 +850,17 @@ public class CosNFileSystem extends FileSystem {
         }
 
         if (!isPosixBucket) {
-            int listMaxLength = this.getConf().getInt(
-                    CosNConfigKeys.LISTSTATUS_LIST_MAX_KEYS,
-                    CosNConfigKeys.DEFAULT_LISTSTATUS_LIST_MAX_KEYS
-            );
-            return internalCopyAndDelete(src, dst, srcFileStatus.isDirectory(), listMaxLength);
+            return internalCopyAndDelete(src, dst, srcFileStatus.isDirectory());
         } else {
             return internalRename(src, dst);
         }
     }
 
     private boolean internalCopyAndDelete(Path srcPath, Path dstPath,
-                                          boolean isDir, int listMaxLength) throws IOException {
+                                          boolean isDir) throws IOException {
         boolean result = false;
         if (isDir) {
-            result = this.copyDirectory(srcPath, dstPath, listMaxLength);
+            result = this.copyDirectory(srcPath, dstPath);
         } else {
             result = this.copyFile(srcPath, dstPath);
         }
@@ -916,7 +916,7 @@ public class CosNFileSystem extends FileSystem {
         String priorLastKey = null;
         do {
             CosNPartialListing objectList = this.nativeStore.list(srcKey,
-                    listMaxLength, priorLastKey, true);
+                    BUCKET_LIST_LIMIT, priorLastKey, true);
             for (FileMetadata file : objectList.getFiles()) {
                 checkPermission(new Path(file.getKey()), RangerAccessType.DELETE);
                 this.boundedCopyThreadPool.execute(new CosNCopyFileTask(

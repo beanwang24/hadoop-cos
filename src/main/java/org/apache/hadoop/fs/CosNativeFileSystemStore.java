@@ -37,7 +37,6 @@ import com.qcloud.cos.model.SSEAlgorithm;
 import com.qcloud.cos.model.SSECOSKeyManagementParams;
 import com.qcloud.cos.model.SSECustomerKey;
 import com.qcloud.cos.model.StorageClass;
-import com.qcloud.cos.model.SymlinkMetadata;
 import com.qcloud.cos.model.UploadPartRequest;
 import com.qcloud.cos.model.UploadPartResult;
 import com.qcloud.cos.region.Region;
@@ -733,14 +732,14 @@ public class CosNativeFileSystemStore implements NativeFileSystemStore {
         try {
             GetSymlinkRequest getSymlinkRequest = new GetSymlinkRequest(
                     this.bucketName, symlink, null);
-            SymlinkMetadata symlinkMetadata = (SymlinkMetadata) callCOSClientWithRetry(getSymlinkRequest);
+            GetSymlinkResult getSymlinkResult = (GetSymlinkResult) callCOSClientWithRetry(getSymlinkRequest);
             if (null != info) {
-                info.setRequestID(symlinkMetadata.getRequestId());
+                info.setRequestID(getSymlinkResult.getRequestId());
             }
-            return new CosNSymlinkMetadata(symlink, symlinkMetadata.getContentLength(),
-                    symlinkMetadata.getLastModified().getTime(), false,
-                    symlinkMetadata.getETag(), symlinkMetadata.getCrc64Ecma(), null,
-                    symlinkMetadata.getVersionId(), symlinkMetadata.getStorageClass(), symlinkMetadata.getTarget());
+            return new CosNSymlinkMetadata(symlink, getSymlinkResult.getContentLength(),
+                    getSymlinkResult.getLastModified(), false,
+                    getSymlinkResult.getETag(), null, null,
+                    getSymlinkResult.getVersionId(), StorageClass.Standard.toString(), getSymlinkResult.getTarget());
         } catch (CosServiceException cosServiceException) {
             if (null != info) {
                 info.setRequestID(cosServiceException.getRequestId());
@@ -1240,8 +1239,8 @@ public class CosNativeFileSystemStore implements NativeFileSystemStore {
         try {
             GetSymlinkRequest getSymlinkRequest = new GetSymlinkRequest(
                     this.bucketName, symlink, null);
-            SymlinkMetadata symlinkMetadata = (SymlinkMetadata) callCOSClientWithRetry(getSymlinkRequest);
-            return symlinkMetadata.getTarget();
+            GetSymlinkResult getSymlinkResult = (GetSymlinkResult) callCOSClientWithRetry(getSymlinkRequest);
+            return getSymlinkResult.getTarget();
         } catch (CosServiceException cosServiceException) {
             if (cosServiceException.getStatusCode() == 400 &&
                     cosServiceException.getErrorCode().compareToIgnoreCase("NotSymlink") == 0) {
@@ -1551,7 +1550,7 @@ public class CosNativeFileSystemStore implements NativeFileSystemStore {
                     return this.cosClient.putSymlink((PutSymlinkRequest) request);
                 } else if (request instanceof GetSymlinkRequest) {
                     sdkMethod = "getSymlink";
-                    return this.cosClient.getSymlinkMetadata((GetSymlinkRequest) request);
+                    return this.cosClient.getSymlink((GetSymlinkRequest) request);
                 } else {
                     throw new IOException("no such method");
                 }

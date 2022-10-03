@@ -250,7 +250,7 @@ public class CosNFileSystem extends FileSystem {
 
         FileStatus fileStatus = this.getFileStatus(f);
         if (fileStatus.isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
             fileStatus = this.getFileStatus(f);
         }
         if (fileStatus.isDirectory()) {
@@ -274,7 +274,7 @@ public class CosNFileSystem extends FileSystem {
 
         FileStatus fileStatus = this.getFileStatus(f);
         if (fileStatus.isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
             fileStatus = this.getFileStatus(f);
         }
         if (fileStatus.isDirectory()) {
@@ -323,7 +323,7 @@ public class CosNFileSystem extends FileSystem {
         try {
             FileStatus targetFileStatus = this.getFileStatus(f);
             if (targetFileStatus.isSymlink()) {
-                f = this.resolveFinalTargetPathFromLink(f);
+                f = this.getLinkTarget(f);
                 // call the getFileStatus for the latest path again.
                 targetFileStatus = getFileStatus(f);
             }
@@ -745,7 +745,7 @@ public class CosNFileSystem extends FileSystem {
     public FSDataInputStream open(Path f, int bufferSize) throws IOException {
         FileStatus fileStatus = getFileStatus(f); // will throw if the file doesn't
         if (fileStatus.isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
             fileStatus = getFileStatus(f);
         }
 
@@ -982,7 +982,7 @@ public class CosNFileSystem extends FileSystem {
         Preconditions.checkArgument(length >= 0);
 
         if (this.getFileStatus(f).isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
         }
 
         if (this.getConf().getBoolean(CosNConfigKeys.CRC64_CHECKSUM_ENABLED,
@@ -1059,7 +1059,7 @@ public class CosNFileSystem extends FileSystem {
     @Override
     public byte[] getXAttr(Path f, String name) throws IOException {
         if (this.getFileStatus(f).isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
         }
 
         Path absolutePath = makeAbsolute(f);
@@ -1087,7 +1087,7 @@ public class CosNFileSystem extends FileSystem {
     @Override
     public Map<String, byte[]> getXAttrs(Path f, List<String> names) throws IOException {
         if (this.getFileStatus(f).isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
         }
 
         Path absolutePath = makeAbsolute(f);
@@ -1113,7 +1113,7 @@ public class CosNFileSystem extends FileSystem {
     @Override
     public Map<String, byte[]> getXAttrs(Path f) throws IOException {
         if (this.getFileStatus(f).isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
         }
 
         Path absolutePath = makeAbsolute(f);
@@ -1136,7 +1136,7 @@ public class CosNFileSystem extends FileSystem {
     @Override
     public void removeXAttr(Path f, String name) throws IOException {
         if (this.getFileStatus(f).isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
         }
 
         Path absolutPath = makeAbsolute(f);
@@ -1162,7 +1162,7 @@ public class CosNFileSystem extends FileSystem {
     @Override
     public List<String> listXAttrs(Path f) throws IOException {
         if (this.getFileStatus(f).isSymlink()) {
-            f = this.resolveFinalTargetPathFromLink(f);
+            f = this.getLinkTarget(f);
         }
 
         Path absolutePath = makeAbsolute(f);
@@ -1225,31 +1225,6 @@ public class CosNFileSystem extends FileSystem {
     @Override
     public Path getLinkTarget(final Path f) throws IOException {
         Path absolutePath = makeAbsolute(f);
-        String symlinkKey = pathToKey(absolutePath);
-        String targetKey = this.nativeStore.getSymlink(symlinkKey);
-        if (targetKey != null) {
-            Path targetPath = keyToPath(targetKey);
-            return this.makeAbsolute(targetPath).makeQualified(getUri(), getWorkingDirectory());
-        } else {
-            throw new FileNotFoundException("Symbolic does not exist: " + f);
-        }
-    }
-
-    @Override
-    protected Path resolveLink(Path f) throws IOException {
-        Path absolutePath = makeAbsolute(f);
-        String symlinkKey = pathToKey(absolutePath);
-        String targetKey = this.nativeStore.getSymlink(symlinkKey);
-        if (null == targetKey) {
-            throw new FileNotFoundException("Symbolic does not exist: " + f);
-        }
-
-        Path targetPath = keyToPath(targetKey);
-        return this.makeAbsolute(targetPath).makeQualified(this.getUri(), this.getWorkingDirectory());
-    }
-
-    private Path resolveFinalTargetPathFromLink(Path link) throws IOException {
-        final Path originalAbsolutePath = makeAbsolute(link);
         return new FileSystemLinkResolver<Path>() {
             @Override
             public Path doCall(Path path) throws IOException, UnresolvedLinkException {
@@ -1268,7 +1243,20 @@ public class CosNFileSystem extends FileSystem {
             public Path next(FileSystem fileSystem, Path path) throws IOException {
                 return fileSystem.getLinkTarget(path);
             }
-        }.resolve(this, originalAbsolutePath);
+        }.resolve(this, absolutePath);
+    }
+
+    @Override
+    protected Path resolveLink(Path f) throws IOException {
+        Path absolutePath = makeAbsolute(f);
+        String symlinkKey = pathToKey(absolutePath);
+        String targetKey = this.nativeStore.getSymlink(symlinkKey);
+        if (null == targetKey) {
+            throw new FileNotFoundException("Symbolic does not exist: " + f);
+        }
+
+        Path targetPath = keyToPath(targetKey);
+        return this.makeAbsolute(targetPath).makeQualified(this.getUri(), this.getWorkingDirectory());
     }
 
     @Override

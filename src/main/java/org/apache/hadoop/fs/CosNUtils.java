@@ -9,12 +9,22 @@ import org.apache.hadoop.io.retry.RetryProxy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URI;
+import java.security.*;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -215,5 +225,81 @@ public final class CosNUtils {
             return originBucketName;
         }
         return originBucketName + "-" + appidStr;
+    }
+
+    public static SecretKey loadSymmetricAESKey(String keyFilePath) throws IOException, NoSuchAlgorithmException,
+            InvalidKeySpecException, InvalidKeyException {
+        // Read private key from file.
+        File keyFile = new File(keyFilePath);
+        FileInputStream keyfis = new FileInputStream(keyFile);
+        byte[] encodedPrivateKey = new byte[(int) keyFile.length()];
+        keyfis.read(encodedPrivateKey);
+        keyfis.close();
+
+        // Generate secret key.
+        return new SecretKeySpec(encodedPrivateKey, "AES");
+    }
+
+    public static KeyPair loadAsymKeyPair(String pubKeyPath, String priKeyPath)
+            throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+        // load public
+        File filePublicKey = new File(pubKeyPath);
+        FileInputStream fis = new FileInputStream(filePublicKey);
+        byte[] encodedPublicKey = new byte[(int) filePublicKey.length()];
+        fis.read(encodedPublicKey);
+        fis.close();
+
+        // load private
+        File filePrivateKey = new File(priKeyPath);
+        fis = new FileInputStream(filePrivateKey);
+        byte[] encodedPrivateKey = new byte[(int) filePrivateKey.length()];
+        fis.read(encodedPrivateKey);
+        fis.close();
+
+        // build RSA KeyPair
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(encodedPublicKey);
+        PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
+
+        PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(encodedPrivateKey);
+        PrivateKey privateKey = keyFactory.generatePrivate(privateKeySpec);
+
+        return new KeyPair(publicKey, privateKey);
+    }
+
+
+    public static void buildAndSaveAsymKeyPair(String pubKeyPath, String priKeyPath) throws IOException, NoSuchAlgorithmException {
+        KeyPairGenerator keyGenerator = KeyPairGenerator.getInstance("RSA");
+        SecureRandom srand = new SecureRandom();
+        keyGenerator.initialize(1024, srand);
+        KeyPair keyPair = keyGenerator.generateKeyPair();
+        PrivateKey privateKey = keyPair.getPrivate();
+        PublicKey publicKey = keyPair.getPublic();
+
+        X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(publicKey.getEncoded());
+        FileOutputStream fos = new FileOutputStream(pubKeyPath);
+        fos.write(x509EncodedKeySpec.getEncoded());
+        fos.close();
+
+        PKCS8EncodedKeySpec pkcs8EncodedKeySpec = new PKCS8EncodedKeySpec(privateKey.getEncoded());
+        fos = new FileOutputStream(priKeyPath);
+        fos.write(pkcs8EncodedKeySpec.getEncoded());
+        fos.close();
+    }
+
+
+    public static void buildAndSaveSymmetricKey(String keyFilePath) throws IOException, NoSuchAlgorithmException {
+        // Generate symmetric 256 bit AES key.
+        KeyGenerator symKeyGenerator = KeyGenerator.getInstance("AES");
+        // JDK默认不支持256位长度的AES秘钥, SDK内部默认使用AES256加密数据
+        // 运行时会打印如下异常信息java.security.InvalidKeyException: Illegal key size or default parameters
+        // 解决办法参考接口文档的FAQ
+        symKeyGenerator.init(256);
+        SecretKey symKey = symKeyGenerator.generateKey();
+
+        X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(symKey.getEncoded());
+        FileOutputStream keyfos = new FileOutputStream(keyFilePath);
+        keyfos.write(x509EncodedKeySpec.getEncoded());
+        keyfos.close();
     }
 }

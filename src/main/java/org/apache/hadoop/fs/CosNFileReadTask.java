@@ -1,5 +1,6 @@
 package org.apache.hadoop.fs;
 
+import com.qcloud.cos.model.COSObject;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.IOUtils;
 import org.slf4j.Logger;
@@ -117,5 +118,6 @@ public class CosNFileReadTask implements Runnable {
         }
         inputStream.close();
         this.readBuffer.setStatus(CosNFSInputStream.ReadBuffer.SUCCESS);
+
     }
 }

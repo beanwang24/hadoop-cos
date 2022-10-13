@@ -3,6 +3,8 @@ package org.apache.hadoop.fs;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.qcloud.chdfs.permission.RangerAccessType;
+import com.qcloud.cos.model.GetObjectMetadataRequest;
+import com.qcloud.cos.model.ObjectMetadata;
 import com.qcloud.cos.utils.StringUtils;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
@@ -16,10 +18,7 @@ import org.apache.hadoop.util.Progressable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -126,6 +125,7 @@ public class CosNFileSystem extends FileSystem {
                 CosNConfigKeys.COSN_CREATE_RECURSIVE_CHECK_DST_DIR_ENABLED,
                 CosNConfigKeys.DEFAULT_COSN_CREATE_RECURSIVE_CHECK_DST_DIR_ENABLED
         );
+
         Preconditions.checkArgument(uploadThreadPoolSize > 0,
                 String.format("The uploadThreadPoolSize[%d] should be positive.", uploadThreadPoolSize));
         Preconditions.checkArgument(readAheadPoolSize > 0,
@@ -306,7 +306,6 @@ public class CosNFileSystem extends FileSystem {
                 validatePath(f);
             }
         }
-
         Path absolutePath = makeAbsolute(f);
         String key = pathToKey(absolutePath);
         if (this.getConf().getBoolean(CosNConfigKeys.COSN_POSIX_EXTENSION_ENABLED,
@@ -706,6 +705,7 @@ public class CosNFileSystem extends FileSystem {
         LOG.info("Opening '" + f + "' for reading");
         Path absolutePath = makeAbsolute(f);
         String key = pathToKey(absolutePath);
+
         return new FSDataInputStream(new BufferedFSInputStream(
                 new CosNFSInputStream(this.getConf(), nativeStore, statistics, key,
                         fileStatus.getLen(), this.boundedIOThreadPool),

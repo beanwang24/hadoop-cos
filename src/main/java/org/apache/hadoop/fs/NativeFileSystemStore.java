@@ -1,5 +1,6 @@
 package org.apache.hadoop.fs;
 
+import com.qcloud.cos.model.COSObject;
 import com.qcloud.cos.model.CompleteMultipartUploadResult;
 import com.qcloud.cos.model.HeadBucketResult;
 import com.qcloud.cos.model.PartETag;
@@ -46,10 +47,10 @@ public interface NativeFileSystemStore {
 
     String getUploadId(String key) throws IOException;
 
-    PartETag uploadPart(File file, String key, String uploadId, int partNum, byte[] md5hash) throws IOException;
+    //PartETag uploadPart(File file, String key, String uploadId, int partNum, byte[] md5hash) throws IOException;
 
     PartETag uploadPart(InputStream inputStream, String key, String uploadId,
-                        int partNum, long partSize, byte[] md5hash) throws IOException;
+                        int partNum, long partSize, byte[] md5hash, boolean isLastPart) throws IOException;
 
     PartETag uploadPartCopy(String uploadId, String srcKey, String destKey, int partNum,
                             long firstByte, long lastByte) throws IOException;
@@ -79,7 +80,6 @@ public interface NativeFileSystemStore {
                           String localBlockPath) throws IOException;
 
     long getFileLength(String key) throws IOException;
-
     CosNPartialListing list(String prefix, int maxListingLength) throws IOException;
 
     CosNPartialListing list(String prefix, int maxListingLength, CosNResultInfo info) throws IOException;
@@ -97,7 +97,7 @@ public interface NativeFileSystemStore {
     void deleteRecursive(String key) throws IOException;
 
     void copy(String srcKey, String dstKey) throws IOException;
-
+    public void ModifyDataSize(String key, long fileSize) throws IOException;
     void rename(String srcKey, String dstKey) throws IOException;
 
     /**

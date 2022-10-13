@@ -1,5 +1,7 @@
 package org.apache.hadoop.fs;
 
+import com.qcloud.cos.model.GetObjectMetadataRequest;
+import com.qcloud.cos.model.ObjectMetadata;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,6 +1,7 @@
 package org.apache.hadoop.fs;
 
 import com.qcloud.cos.utils.CRC64;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +62,7 @@ public class ConsistencyChecker {
          * judge the success operation
          * @return whether success
          */
-        public boolean isSucceeded() {
+        public boolean isSucceeded(Configuration conf) {
             boolean succeeded = true;
             do {
                 if (null != this.exception) {
@@ -78,15 +79,18 @@ public class ConsistencyChecker {
                     succeeded = false;
                     break;
                 }
-
+                if(conf.getBoolean(CosNConfigKeys.COSN_CLIENT_SIDE_ENCRYPTION_ENABLED,
+                        CosNConfigKeys.DEFAULT_COSN_CLIENT_SIDE_ENCRYPTION_ENABLED)){
+                    succeeded = true;
+                    break;
+                }
                 if (this.expectedLength != this.realLength) {
                     this.description = String.format("The expected length is not equal to the the real length. " +
                             "expected length: %d, real length: %d.", this.expectedLength, this.realLength);
                     succeeded = false;
                     break;
                 }
-
-                if (this.expectedCrc64Value != this.realCrc64Value) {
+                if (this.expectedCrc64Value != this.realCrc64Value){
                     this.description = String.format("The CRC64 checksum verify failed. " +
                             "expected CRC64 value: %d, real CRC64 value: %d",
                             this.expectedCrc64Value, this.realCrc64Value);
@@ -95,7 +99,11 @@ public class ConsistencyChecker {
                 }
             } while(false);
 
-            if (succeeded) {
+            if(conf.getBoolean(CosNConfigKeys.COSN_CLIENT_SIDE_ENCRYPTION_ENABLED,
+                    CosNConfigKeys.DEFAULT_COSN_CLIENT_SIDE_ENCRYPTION_ENABLED)){
+
+            }
+            else if (succeeded) {
                 this.description = String.format("File verification succeeded. " +
                         "expected length: %d, real length: %d, expected CRC64 value: %d, real CRC64 value: %d",
                         this.expectedLength, this.realLength, this.expectedCrc64Value, this.realCrc64Value);

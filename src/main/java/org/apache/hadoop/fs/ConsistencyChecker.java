@@ -3,6 +3,7 @@ package org.apache.hadoop.fs;
 import com.qcloud.cos.utils.CRC64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -61,7 +62,7 @@ public class ConsistencyChecker {
          * judge the success operation
          * @return whether success
          */
-        public boolean isSucceeded() {
+        public boolean isSucceeded(Boolean useClientSideEncryption) {
             boolean succeeded = true;
             do {
                 if (null != this.exception) {
@@ -78,7 +79,10 @@ public class ConsistencyChecker {
                     succeeded = false;
                     break;
                 }
-
+                if(useClientSideEncryption){
+                    succeeded = true;
+                    break;
+                }
                 if (this.expectedLength != this.realLength) {
                     this.description = String.format("The expected length is not equal to the the real length. " +
                             "expected length: %d, real length: %d.", this.expectedLength, this.realLength);
@@ -94,8 +98,11 @@ public class ConsistencyChecker {
                     break;
                 }
             } while(false);
-
-            if (succeeded) {
+            if(useClientSideEncryption){
+                this.description = String.format("Using client side encryption, skip the file" +
+                        "verification.", this.description);
+            }
+            else if (succeeded) {
                 this.description = String.format("File verification succeeded. " +
                         "expected length: %d, real length: %d, expected CRC64 value: %d, real CRC64 value: %d",
                         this.expectedLength, this.realLength, this.expectedCrc64Value, this.realCrc64Value);

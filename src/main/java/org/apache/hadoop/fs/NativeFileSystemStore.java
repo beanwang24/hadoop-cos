@@ -49,7 +49,7 @@ public interface NativeFileSystemStore {
     PartETag uploadPart(File file, String key, String uploadId, int partNum, byte[] md5hash) throws IOException;
 
     PartETag uploadPart(InputStream inputStream, String key, String uploadId,
-                        int partNum, long partSize, byte[] md5hash) throws IOException;
+                        int partNum, long partSize, byte[] md5hash, boolean isLastPart) throws IOException;
 
     PartETag uploadPartCopy(String uploadId, String srcKey, String destKey, int partNum,
                             long firstByte, long lastByte) throws IOException;
@@ -99,6 +99,8 @@ public interface NativeFileSystemStore {
     void copy(String srcKey, String dstKey) throws IOException;
 
     void rename(String srcKey, String dstKey) throws IOException;
+
+    void ModifyDataSize(String key, long fileSize) throws IOException;
 
     /**
      * Delete all keys with the given prefix. Used for testing.

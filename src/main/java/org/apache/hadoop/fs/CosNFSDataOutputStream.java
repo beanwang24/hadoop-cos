@@ -55,6 +55,7 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
     protected boolean dirty;
     protected boolean committed;
     protected boolean closed;
+    protected boolean needUploadCurrentPart;
     protected boolean flushCOSEnabled;
     private boolean clientEncryptionEnabled;
     protected MessageDigest currentPartMessageDigest;
@@ -107,6 +108,7 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
         this.dirty = true;
         this.committed = false;
         this.closed = false;
+        this.needUploadCurrentPart = false;
 
         if (conf.getBoolean(CosNConfigKeys.COSN_UPLOAD_PART_CHECKSUM_ENABLED_KEY,
                 CosNConfigKeys.DEFAULT_COSN_UPLOAD_CHECKS_ENABLE)) {
@@ -144,6 +146,13 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
         }
 
         while (len > 0) {
+            if(needUploadCurrentPart){
+                this.currentPartOutputStream.flush();
+                this.currentPartOutputStream.close();
+                this.uploadCurrentPart(false);
+                this.initNewCurrentPartResource();
+                needUploadCurrentPart = false;
+            }
             long writeBytes;
             if (this.currentPartWriteBytes + len > this.partSize) {
                 writeBytes = this.partSize - this.currentPartWriteBytes;
@@ -159,10 +168,11 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
                 this.consistencyChecker.writeBytes(b, off, (int) writeBytes);
             }
             if (this.currentPartWriteBytes >= this.partSize) {
-                this.currentPartOutputStream.flush();
-                this.currentPartOutputStream.close();
-                this.uploadCurrentPart(false);
-                this.initNewCurrentPartResource();
+//                this.currentPartOutputStream.flush();
+//                this.currentPartOutputStream.close();
+                //this.uploadCurrentPart(false);
+                //this.initNewCurrentPartResource();
+                needUploadCurrentPart = true;
             }
             len -= writeBytes;
             off += writeBytes;
@@ -328,7 +338,7 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
 
         try {
             if (this.currentPartNumber > 1 && null != this.multipartUpload) {
-                if (this.currentPartWriteBytes > 0) {
+                if (this.currentPartWriteBytes > 0 || clientEncryptionEnabled) {
                     this.uploadCurrentPart(true);
                 }
                 if(!clientEncryptionEnabled) {
@@ -562,7 +572,7 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
             partsSubmitted.incrementAndGet();
             bytesSubmitted.addAndGet(uploadPart.getPartSize());
             try {
-                LOG.info("Start to upload the part Sync: {}", uploadPart);
+                LOG.debug("Start to upload the part Sync: {}", uploadPart);
                 PartETag partETag = (nativeStore).uploadPart(
                         new BufferInputStream(uploadPart.getCosNByteBuffer()),
                         cosKey,
@@ -576,6 +586,10 @@ public class CosNFSDataOutputStream extends OutputStream implements Abortable {
                 throw e;
             } catch (CosClientException e) {
                 throw e;
+            } finally {
+                if (!uploadPart.isLast) {
+                    BufferPool.getInstance().returnBuffer(uploadPart.getCosNByteBuffer());
+                }
             }
         }
 
